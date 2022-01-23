@@ -16,7 +16,8 @@ class FeedReader:
         self.load_config()
 
         self.message_log_file_path = message_log_file_path or \
-                                     hashlib.md5(self.config["feed_url"].encode()).hexdigest() + ".json"
+                                     os.path.join("logs", hashlib.md5(
+                                         self.config["feed_url"].encode()).hexdigest() + ".json")
         self.message_log = collections.deque(message_log_depth * [None], message_log_depth)
 
         # load log history from disk
