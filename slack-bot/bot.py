@@ -1,3 +1,4 @@
+import datetime
 import time
 import traceback
 
@@ -28,7 +29,7 @@ def main():
                     feed["feed"].check_feed()
 
                     # report to slack if feed went from offline to online
-                    if REPORT_OUTAGE_IN_SLACK and not feed.get("last_query_succeeded"):
+                    if REPORT_OUTAGE_IN_SLACK and not feed.get("last_query_succeeded", True):
                         feed["feed"].send_slack_message(f"{feed_name} is back online")
                     feed["last_query_succeeded"] = True
                 except Exception:
@@ -43,6 +44,8 @@ def main():
             print(f"[ERROR] unexpected error in main thread\n{traceback.format_exc()}")
         
         # always enforce sleep in between requests
+        print("[INFO] last update completed on "
+              f"{datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).strftime(r'%B %d %Y %H:%M:%S.%f%z (%Z)')}")
         time_left = QUERY_DELAY - (time.time() - start_time)
         if time_left > 0:
             time.sleep(time_left)

@@ -2,9 +2,10 @@ import collections
 import datetime
 import json
 import os
+import traceback
 
 import boto3
-import requests
+import feedparser
 
 from feeds.feed import FeedReader
 
@@ -13,7 +14,7 @@ class DarkfeedIO_RSS(FeedReader):
     def __init__(self,  config_file_name: str, message_log_file_path: str=None,
                  message_log_depth: int=20):
         # attempt to load s3 configuration from disk
-        self.s3_config_file_path = os.path.join("config", f"s3_{config_file_name}.json")
+        self.s3_config_file_path = os.path.join("config", f"s3_{config_file_name}")
 
         # initialize the feed object as usual, evaluating any overriden functions like
         #   - load_config
@@ -44,22 +45,25 @@ class DarkfeedIO_RSS(FeedReader):
 
     def retrieve_feed_content(self):
         """Read and convert raw feed content into a list of dictionaries"""
-        request_session = requests.Session()
         headers = collections.OrderedDict()
 
         headers["Host"] = "darkfeed.io"
         headers["Cookie"] = self.config["cookie"]
 
-        response = request_session.get(self.config["feed_url"], headers=headers)
-        response.raise_for_status()
+        response = feedparser.parse(self.config["feed_url"], request_headers=headers)
+        
+        # verify expected response was received
+        if response.get('status') not in [200, 201] or not isinstance(response.get('entries'), list):
+            raise RuntimeError(
+                f"[ERROR] unexpected error while reading feed\n{traceback.format_exc()}")
 
         if 'login1' in response.url:
             print("[ERROR] Darkfeed cookie needs to be refreshed")
 
         return [{
-            "group": entry["attacker_name"],
-            "victim": entry["victim_name"],
-            "date": datetime.datetime(
-                *entry["published_date"][:6], timezone=datetime.timezone.utc),
+            "group": entry["title"],
+            "victim": entry["summary"],
+            "date": str(datetime.datetime(*entry["published_parsed"][:6],
+                                          tzinfo=datetime.timezone.utc)),
             "link": entry["link"]
         } for entry in response.entries]

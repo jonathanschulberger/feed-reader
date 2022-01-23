@@ -33,7 +33,7 @@ class FeedReader:
         raise RuntimeError("NOT IMPLEMENTED")
 
 
-    def format_message(raw_attributes: dict):
+    def format_message(self, raw_attributes: dict):
         """Convert key/value pairs into a json-capable string"""
         attributes = {
             "Group": raw_attributes.get("group", None),
@@ -64,7 +64,7 @@ class FeedReader:
 
         # assume feed content is [<newest>, ... , <oldest>]
         # process in order or [<oldest>, ... , <newest>]
-        for idx, raw_message in enumerate(self.retrieve_feed_content().reverse()):
+        for idx, raw_message in enumerate(reversed(self.retrieve_feed_content())):
             try:
                 message = self.format_message(raw_message)
             
@@ -81,7 +81,9 @@ class FeedReader:
                 self.send_slack_message(message)
                 self.message_log.appendleft(message)
             except Exception:
-                print(f"[ERROR] could not parse message from\n{raw_message}")
+                print(
+                    f"[ERROR] could not parse message from\n{raw_message}"
+                    f"\n{traceback.format_exc()}")
                 break
 
         # flush message log to disk
@@ -93,10 +95,25 @@ class FeedReader:
             "Content-type": "application/json"
         }
 
+        data = {
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": message
+                    }
+                },
+                {
+                    "type": "divider"
+                }
+            ]
+        }
+
         # post message to slack
         response = requests.post(
             self.config["slack_hook_url"], headers=request_headers,
-            data=json.dumps({"text": message}))
+            data=json.dumps(data))
 
         # verify slack responded appropriately
         response.raise_for_status()
@@ -111,7 +128,7 @@ class FeedReader:
             # load log from disk
             if os.path.exists(self.message_log_file_path):
                 with open(self.message_log_file_path, 'r') as on_disk_log:
-                    for message in json.load(on_disk_log).reverse():
+                    for message in reversed(json.load(on_disk_log)):
                         self.message_log.appendleft(message)
         except Exception:
             print(f"[WARNING] could not load message log from disk\n{traceback.format_exc()}")
