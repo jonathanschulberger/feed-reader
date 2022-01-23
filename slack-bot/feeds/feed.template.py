@@ -1,6 +1,4 @@
-import json
-
-from util.feed import FeedReader
+from feeds.feed import FeedReader
 
 
 class SiteName(FeedReader):

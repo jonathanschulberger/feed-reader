@@ -1,0 +1,32 @@
+{
+  "Id": "Policy1642840940946",
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Stmt1642840897602",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Effect": "Allow",
+      "Resource": "<bucket-name>/*",
+      "Principal": {
+        "AWS": [
+          "<user-arn>"
+        ]
+      }
+    },
+    {
+      "Sid": "Stmt1642840937012",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:aws:s3:::<bucket-name>",
+      "Principal": {
+        "AWS": [
+          "<user-arn>"
+        ]
+      }
+    }
+  ]
+}

@@ -8,11 +8,11 @@ import requests
 
 
 class FeedReader:
-    def __init__(self, config_file_path: str, message_log_file_path: str=None,
+    def __init__(self, config_file_name: str, message_log_file_path: str=None,
                  message_log_depth: int=20):
         # load config from disk
         # "feed_url" and "slack_hook_url" must be included
-        self.config_file_path = config_file_path
+        self.config_file_path = os.path.join("config", config_file_name)
         self.load_config()
 
         self.message_log_file_path = message_log_file_path or \

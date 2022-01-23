@@ -1,22 +1,23 @@
 import collections
 import datetime
 import json
+import os
 
 import boto3
 import requests
 
-from util.feed import FeedReader
+from feeds.feed import FeedReader
 
 
 class DarkfeedIO_RSS(FeedReader):
-    def __init__(self,  config_file_path: str, message_log_file_path: str=None,
+    def __init__(self,  config_file_name: str, message_log_file_path: str=None,
                  message_log_depth: int=20):
         # attempt to load s3 configuration from disk
-        self.s3_config_file_path = "darkfeed_s3_config.json"
+        self.s3_config_file_path = os.path.join("config", f"s3_{config_file_name}.json")
 
         # initialize the feed object as usual, evaluating any overriden functions like
         #   - load_config
-        super().__init__(config_file_path, message_log_file_path, message_log_depth)
+        super().__init__(config_file_name, message_log_file_path, message_log_depth)
 
 
     def load_config(self):

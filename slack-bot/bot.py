@@ -1,7 +1,7 @@
 import time
 import traceback
 
-from util.darkfeed import DarkfeedIO_RSS
+from feeds.darkfeed import DarkfeedIO_RSS
 
 
 # constants
