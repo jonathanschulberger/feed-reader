@@ -1,0 +1,7 @@
+{
+    "feed_url": "<https-address-for-feed>",
+    "slack_hook_url": "<slack-webhook-url>",
+
+    "<other-attribute>": "<other-value>",
+    ...
+}
