@@ -1,21 +1,23 @@
-import datetime
 import time
 import traceback
 
-from feeds.darkfeed import DarkfeedIO_RSS
+from datetime import datetime, timezone
+
+from feeds import darkfeed
 
 
 # constants
 QUERY_DELAY = 60  # 60 second delay between reading from APIs
 REPORT_OUTAGE_IN_SLACK = True  # post online/offline message to feed-specific slack
+SYSLOG_DATE_FORMAT = r'%B %d %Y, %H:%M:%S.%f%z (%Z)'
 
 
 def main():
     ################################ DEFINE FEEDS HERE #################################
     ################ <feed-name>: { "feed": <initialized-feed-object> } ################
-    feeds = {
-        "Darkfeed": { "feed": DarkfeedIO_RSS("darkfeed_config.json") },
-    }
+    feeds = [
+        darkfeed.RSS("darkfeed")
+    ]
     ####################################################################################
 
     print('[INFO] feeds initialized successfully')
@@ -24,28 +26,29 @@ def main():
         start_time = time.time()
         try:
             # process feeds
-            for feed_name, feed in feeds.items():
+            for feed in feeds:
                 try:
-                    feed["feed"].check_feed()
+                    feed.check_feed()
 
                     # report to slack if feed went from offline to online
-                    if REPORT_OUTAGE_IN_SLACK and not feed.get("last_query_succeeded", True):
-                        feed["feed"].send_slack_message(f"{feed_name} is back online")
-                    feed["last_query_succeeded"] = True
+                    if REPORT_OUTAGE_IN_SLACK and not feed.last_query_succeeded:
+                        feed.send_slack_message(f"{feed.name.title()} is back online")
+                    feed.last_query_succeeded = True
                 except Exception:
-                    print(f"[ERROR] could not process '{feed_name}'\n{traceback.format_exc()}")
+                    print(f"[ERROR] could not process '{feed.name}'\n{traceback.format_exc()}")
 
                     # report to slack if feed went from online to offline
-                    if REPORT_OUTAGE_IN_SLACK and feed.get("last_query_succeeded"):
-                        feed["feed"].send_slack_message(f"{feed_name.title()} is offline")
-                    feed["last_query_succeeded"] = False
+                    if REPORT_OUTAGE_IN_SLACK and feed.last_query_succeeded:
+                        feed.send_slack_message(f"{feed.name.title()} is offline")
+                    feed.last_query_succeeded = False
 
         except Exception:
             print(f"[ERROR] unexpected error in main thread\n{traceback.format_exc()}")
         
         # always enforce sleep in between requests
-        print("[INFO] last update completed on "
-              f"{datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).strftime(r'%B %d %Y %H:%M:%S.%f%z (%Z)')}")
+        print("[INFO] cycle completed "
+              f"{datetime.utcnow().replace(tzinfo=timezone.utc).strftime(SYSLOG_DATE_FORMAT)} "
+              f"({time.time() - start_time:.2f} seconds)")
         time_left = QUERY_DELAY - (time.time() - start_time)
         if time_left > 0:
             time.sleep(time_left)

@@ -1,24 +1,30 @@
 import collections
-import hashlib
 import json
 import os
 import traceback
 
 import requests
 
+# constants
+BASE_PATH_PREFIX = os.path.dirname(os.path.join(os.path.dirname(__file__)))
+CONFIG_PATH_PREFIX = os.path.join(BASE_PATH_PREFIX, "config")
+LOG_PATH_PREFIX = os.path.join(BASE_PATH_PREFIX, "logs")
+
 
 class FeedReader:
-    def __init__(self, config_file_name: str, message_log_file_path: str=None,
+    def __init__(self, feed_name: str, message_log_file_path: str=None,
                  message_log_depth: int=20):
+        self.name = feed_name
+        self.message_log_depth = 20
+        self.last_query_succeeded = True
+
         # load config from disk
         # "feed_url" and "slack_hook_url" must be included
-        self.config_file_path = os.path.join("config", config_file_name)
+        self.config_file_path = os.path.join(CONFIG_PATH_PREFIX, f"{feed_name}.json")
         self.load_config()
 
         self.message_log_file_path = message_log_file_path or \
-                                     os.path.join("logs", hashlib.md5(
-                                         self.config["feed_url"].encode()).hexdigest() + ".json")
-        self.message_log = collections.deque(message_log_depth * [None], message_log_depth)
+                                     os.path.join(LOG_PATH_PREFIX, f"{feed_name}.json")
 
         # load log history from disk
         self.load_messages_from_disk()
@@ -63,53 +69,53 @@ class FeedReader:
             print("[WARNING] no feed content to process")
             return
 
-        # assume feed content is [<newest>, ... , <oldest>]
-        # process in order or [<oldest>, ... , <newest>]
-        for idx, raw_message in enumerate(reversed(self.retrieve_feed_content())):
-            try:
-                message = self.format_message(raw_message)
-            
-                if message in self.message_log:
-                    # go to next iteration, might still be a new message
-                    if idx:
-                        continue
-
-                    # is this the exact same list of messages?
-                    if self.message_log.index(message) == len(self.message_log) - 1:
-                        return
-
-                # new message found
-                self.send_slack_message(message)
-                self.message_log.appendleft(message)
-            except Exception:
-                print(
-                    f"[ERROR] could not parse message from\n{raw_message}"
-                    f"\n{traceback.format_exc()}")
+        # feed content is [<newest>, ... , <oldest>]
+        # find index of oldest new entry
+        oldest_new_entry_idx = None
+        for idx, raw_message in enumerate(feed_content):
+            if raw_message in self.message_log:
+                # don't bother checking older messages 
                 break
+            oldest_new_entry_idx = idx
+
+        # stop if there are no new entries
+        if oldest_new_entry_idx is None:
+            return
+
+        while oldest_new_entry_idx >= 0:
+            raw_message = feed_content[oldest_new_entry_idx]
+            self.send_slack_message(self.format_message(raw_message))
+            self.message_log.appendleft(raw_message)
+            oldest_new_entry_idx -= 1
 
         # flush message log to disk
         self.save_messages_to_disk()
 
 
-    def send_slack_message(self, message: str):
+    def send_slack_message(self, message):
         request_headers = {
             "Content-type": "application/json"
         }
 
-        data = {
-            "blocks": [
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": message
+        # directly support rich slack message formats
+        data = message
+
+        # fall back to base message format if only a string is supplied
+        if isinstance(message, str):
+            data = {
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": message
+                        }
+                    },
+                    {
+                        "type": "divider"
                     }
-                },
-                {
-                    "type": "divider"
-                }
-            ]
-        }
+                ]
+            }
 
         # post message to slack
         response = requests.post(
@@ -121,16 +127,13 @@ class FeedReader:
 
 
     def load_messages_from_disk(self):
-        try:
-            # clear current log
-            log_depth = len(self.message_log)
-            self.message_log = collections.deque(log_depth * [None], log_depth)
-            
+        try:     
             # load log from disk
             if os.path.exists(self.message_log_file_path):
                 with open(self.message_log_file_path, 'r') as on_disk_log:
-                    for message in reversed(json.load(on_disk_log)):
-                        self.message_log.appendleft(message)
+                    self.message_log = collections.deque(
+                       json.load(on_disk_log), self.message_log_depth 
+                    )
         except Exception:
             print(f"[WARNING] could not load message log from disk\n{traceback.format_exc()}")
 

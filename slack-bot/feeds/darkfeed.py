@@ -1,46 +1,72 @@
 import collections
 import datetime
-import json
 import os
 import traceback
 
-import boto3
 import feedparser
 
 from feeds.feed import FeedReader
 
+# constants
+BASE_PATH_PREFIX = os.path.dirname(os.path.join(os.path.dirname(__file__)))
 
-class DarkfeedIO_RSS(FeedReader):
-    def __init__(self,  config_file_name: str, message_log_file_path: str=None,
-                 message_log_depth: int=20):
-        # attempt to load s3 configuration from disk
-        self.s3_config_file_path = os.path.join("config", f"s3_{config_file_name}")
 
-        # initialize the feed object as usual, evaluating any overriden functions like
-        #   - load_config
-        super().__init__(config_file_name, message_log_file_path, message_log_depth)
-
+class RSS(FeedReader):
 
     def load_config(self):
         """Sync main feed config from AWS S3"""
-        # update s3 configuration
-        with open(self.s3_config_file_path, 'r') as config_file:
-            self.s3_config = json.load(config_file)
-
-        # sync remote config with new local config values
-        self.sync_config_from_s3()
-
         # perform loading of standard config
         super().load_config()
 
+        # update s3 configuration
+        self.config["cookie_file_path"] = os.path.join(
+            BASE_PATH_PREFIX, self.config["cookie_file_path"])
+        with open(self.config["cookie_file_path"], 'r') as cookie_file:
+            self.config["cookie"] = cookie_file.read().strip()
 
-    def sync_config_from_s3(self):
-        """Use S3 config to sync main feed config from AWS S3 bucket"""
-        s3 = boto3.client(
-            's3', aws_access_key_id=self.s3_config["aws_access_key_id"],
-            aws_secret_access_key=self.s3_config["aws_secret_access_key"])
-        s3.download_file(
-            self.s3_config["s3_bucket"], self.s3_config["s3_filename"], self.config_file_path)
+
+    def format_message(self, raw_attributes: dict):
+        return {
+            "blocks": [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": self.name.title(),
+                        "emoji": True
+                    }
+                },
+                {
+                    "type": "section",
+                    "fields": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Group:*\n{raw_attributes.get('group', None)}"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Victim:*\n{raw_attributes.get('victim', None)}"
+                        }
+                    ]
+                },
+                {
+                    "type": "section",
+                    "fields": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Date:*\n{raw_attributes.get('date', None)}"
+                        }
+                    ]
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"{raw_attributes.get('link', None)}"
+                    }
+                }
+            ]
+        }
 
 
     def retrieve_feed_content(self):

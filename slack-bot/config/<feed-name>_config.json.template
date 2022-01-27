@@ -1,6 +1,6 @@
 {
-    "feed_url": "<https-address-for-feed>",
-    "slack_hook_url": "<slack-webhook-url>",
+    "feed_url": "<https-address-for-feed|REQUIRED>",
+    "slack_hook_url": "<slack-webhook-url|REQUIRED>",
 
     "<other-attribute>": "<other-value>",
     ...
